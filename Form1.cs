@@ -1,83 +1,177 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO.Ports;
 using System.Windows.Forms;
 using Tesseract;
+using System.Threading;
 
 namespace ShootMe
 {
-    public partial class Form1 : Form
+    public partial class form1 : Form
     {
-        public Form1()
+        public form1()
         {
             InitializeComponent();
         }
 
+        static readonly SerialPort arduino = new SerialPort("com6", 9600);
         static int x = 723;
         static int y = 941;
         static int frequencyOfCheck = 100; //Milliseconds
-        static string comPort = "com5";
-
-        static SerialPort arduino = new SerialPort(comPort, 115200);
         static Bitmap final = new Bitmap(70, 35);
+        static Bitmap otherFinal = new Bitmap(70, 35);
         static Bitmap grey = new Bitmap("GreyBackground.png");
-        static int prevHealth = 100;
-        static int recentRead = 100;
+        static int prevHealth;
+        static int recentHealth;
         static int totalChanges = 0;
-
-
-        
-
+        bool inGame = false;
+        static Color green = Color.FromArgb(77, 188, 53);
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            this.Height = 110; //165, 110
+            this.Width = 165;
+            gbDebug.Hide();
+            CheckForIllegalCrossThreadCalls = false;
             try
             {
                 arduino.Open();
             }
             catch (Exception error)
             {
-                MessageBox.Show("Arduino error: \n\n" + error);
+                MessageBox.Show("Arduino error: \n\n" + error, "Arduino Issue", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
             }
             checkScreen.Interval = frequencyOfCheck;
             checkScreen.Start();
-        }
+            restart.Stop();
+        }   
 
-        private void checkScreen_Tick(object sender, EventArgs e) //Checks the screen every however long
+        private void CheckScreen_Tick(object sender, EventArgs e) //Checks the screen every however long
         {
-            using (Bitmap bmp = new Bitmap(45, 26)) //45, 23
+            using (Bitmap bmp = new Bitmap(5, 5))
             {
                 using (Graphics g = Graphics.FromImage(bmp))
                 {
-                    g.CopyFromScreen(x,
-                                     y,
+                    g.CopyFromScreen(706,
+                                     938,
                                      0, 0,
                                      bmp.Size,
                                      CopyPixelOperation.SourceCopy);
 
-                    final = MakeGrayscale(bmp);
-                    final = InvertColour(final);
-                    final = OverlayImages(final);
-                    final.Save("RecentCapture.png");
+                    for (int i = 0; i < 2; i++)
+                    {
+                        for (int j = 0; j < 2; j++)
+                        {
+                            Color now_color = bmp.GetPixel(j, i);
+                            if (now_color == green)
+                            {
+                                inGame = true;
+                            }
+                            else
+                            {
+                                inGame = false;
+                                Thread.Sleep(20);
+                            }
+                        }
+                    }
+                }
+            }
 
-                    string Results = GetText(final);
-                    Logic(Results);
-                    txtResults.Text = Results;
+            if (inGame && !spectating()) 
+            {
+                using (Bitmap bmp = new Bitmap(45, 26)) //45, 23
+                {
+                    using (Graphics g = Graphics.FromImage(bmp))
+                    {
+                        g.CopyFromScreen(x,
+                                         y,
+                                         0, 0,
+                                         bmp.Size,
+                                         CopyPixelOperation.SourceCopy);
+
+                        final = MakeGrayscale(bmp);
+                        final = InvertColour(final);
+                        final = OverlayImages(final);
+                        pbRecent.Image = final;
+                        string recentRead = GetText(final);
+                        try
+                        {
+                            if (int.Parse(recentRead) <= 100 && int.Parse(recentRead) >= 0)
+                            {
+
+                            }
+                            else
+                            {
+                                recentRead = "0";
+                            }
+                        }
+                        catch
+                        {
+                            recentRead = "0";
+                        }
+           
+                        Logic(recentRead);
+                        txtResults.Text = recentRead;
+                    }
+                }
+            }
+            switch (inGame)
+            {
+                case true:
+                    txtResults.BackColor = Color.Green;
+                    break;
+                case false:
+                    txtResults.BackColor = Color.Red;
+                    break;
+                default:
+                    txtResults.BackColor = Color.Purple;
+                    break;
+            }
+        }
+
+        private bool spectating()
+        {
+            using (Bitmap bmp = new Bitmap(260, 56))
+            {
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.CopyFromScreen(871,
+                                     113,
+                                     0, 0,
+                                     bmp.Size,
+                                     CopyPixelOperation.SourceCopy);
+
+                    for (int i = 0; i < 56; i++)
+                    {
+                        for (int j = 0; j < 260; j++)
+                        {
+                            Color now_color = bmp.GetPixel(j, i);
+                            if (now_color == Color.FromArgb(255, 230, 103))
+                            {
+                                return true;
+                            }
+
+                        }
+                    }
+                    return false;
                 }
             }
         }
 
-        public static Bitmap OverlayImages(Bitmap image) //Overlays the recent screen capture on the grey background to make it easier for the OCR to recognise
+        #region Functions
+        public Bitmap OverlayImages(Bitmap image) //Overlays the recent screen capture on the grey background to make it easier for the OCR to recognise
         {
             System.Drawing.Bitmap canvas = grey;
             Graphics gra = Graphics.FromImage(canvas);
             Bitmap smallImg = new Bitmap(image);
             gra.DrawImage(smallImg, new Point(200, 100));
+            gra.Dispose();
+            smallImg.Dispose();
             return canvas;
         }
 
-        public static string GetText(Bitmap imgsource) //Returns the text from the image
+        private string GetText(Bitmap imgsource) //Returns the text from the image
         {
             var ocrtext = string.Empty;
             using (var engine = new TesseractEngine(@"./tessdata", "eng", EngineMode.Default))
@@ -94,7 +188,7 @@ namespace ShootMe
             return ocrtext;
         }
 
-        public Bitmap InvertColour(Bitmap source) //Inverts the colour to make the image easier to read
+        private Bitmap InvertColour(Bitmap source) //Inverts the colour to make the image easier to read
         {
             Bitmap newBitmap = new Bitmap(source.Width, source.Height);
             Graphics g = Graphics.FromImage(newBitmap);
@@ -120,7 +214,7 @@ namespace ShootMe
             return newBitmap;
         }
 
-        public static Bitmap MakeGrayscale(Bitmap original) //Greyscales image to make it easier to read
+        private Bitmap MakeGrayscale(Bitmap original) //Greyscales image to make it easier to read
         {
             Bitmap newBitmap = new Bitmap(original.Width, original.Height);
             Graphics g = Graphics.FromImage(newBitmap);
@@ -145,23 +239,21 @@ namespace ShootMe
         {
             try
             {
-                string test = ocrRead.Substring(0, 1);
-                recentRead = int.Parse(ocrRead);
-                if (recentRead < 101 && recentRead >= 0)
+                recentHealth = int.Parse(ocrRead);
+                if (recentHealth < 101 && recentHealth >= 0)
                 {
-                    if (recentRead != prevHealth && recentRead != 100)
+                    lblCurrent.Text = recentHealth.ToString();
+                    lblRecent.Text = prevHealth.ToString();
+                    if (recentHealth < prevHealth)
                     {
                         totalChanges++;
-                        lblTotalChanges.Text = "Total Changes: " + totalChanges.ToString();
-                        prevHealth = recentRead;
-                        try
-                        {
-                            arduino.WriteLine("fire");
-                        }
-                        catch (Exception er)
-                        {
-                            MessageBox.Show("Arduino error:\n\n" + er);
-                        }
+                        lblTotalChanges.Text = "Changes: " + totalChanges.ToString();
+                        arduino.WriteLine("fire");
+                        prevHealth = recentHealth;
+                    }
+                    if (recentHealth >= prevHealth)
+                    {
+                        prevHealth = recentHealth;
                     }
                 }
                 else
@@ -174,5 +266,63 @@ namespace ShootMe
 
             }
         }
+#endregion
+
+        #region Just buttons
+        private void cmdShoot_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                arduino.Open();
+            }
+            catch
+            {
+            }
+            try
+            {
+                arduino.WriteLine("fire");
+            }
+            catch (Exception)
+            {
+                MessageBox.Show("Operation Failed");
+            }
+        }
+
+        private void restart_Tick(object sender, EventArgs e)
+        {
+
+        }
+
+        private void cmdRestart_Click(object sender, EventArgs e)
+        {
+            System.Diagnostics.Process.Start("ShootMe Small.exe");
+            Environment.Exit(0);
+        }
+
+        private void cmdReset_Click(object sender, EventArgs e)
+        {
+            recentHealth = 100;
+            prevHealth = 100;
+        }
+
+        private void form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            arduino.Close();
+        }
+
+        private void CmdDebug_Click(object sender, EventArgs e)
+        {
+            this.Height = 209; //614, 209
+            this.Width = 614;
+            gbDebug.Show();
+        }
+
+        private void CmdBack_Click(object sender, EventArgs e)
+        {
+            gbDebug.Hide();
+            this.Width = 165; //165, 110   
+            this.Height = 110;     
+        }
+        #endregion
     }
 }
