@@ -25,7 +25,6 @@ namespace ShootMe
         static int prevHealth;
         static int recentHealth;
         static int totalChanges = 0;
-        bool inGame = false;
         static Color green = Color.FromArgb(77, 188, 53);
 
         private void Form1_Load(object sender, EventArgs e)
@@ -45,41 +44,15 @@ namespace ShootMe
             checkScreen.Interval = frequencyOfCheck;
             checkScreen.Start();
             restart.Stop();
-        }   
+        }
 
         private void CheckScreen_Tick(object sender, EventArgs e) //Checks the screen every however long
         {
-            using (Bitmap bmp = new Bitmap(5, 5))
-            {
-                using (Graphics g = Graphics.FromImage(bmp))
-                {
-                    g.CopyFromScreen(706,
-                                     938,
-                                     0, 0,
-                                     bmp.Size,
-                                     CopyPixelOperation.SourceCopy);
+            
 
-                    for (int i = 0; i < 2; i++)
-                    {
-                        for (int j = 0; j < 2; j++)
-                        {
-                            Color now_color = bmp.GetPixel(j, i);
-                            if (now_color == green)
-                            {
-                                inGame = true;
-                            }
-                            else
-                            {
-                                inGame = false;
-                                Thread.Sleep(20);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (inGame && !spectating()) 
+            if (inGame() && !spectating())
             {
+                txtResults.BackColor = Color.Green;
                 using (Bitmap bmp = new Bitmap(45, 26)) //45, 23
                 {
                     using (Graphics g = Graphics.FromImage(bmp))
@@ -110,23 +83,47 @@ namespace ShootMe
                         {
                             recentRead = "0";
                         }
-           
+
                         Logic(recentRead);
                         txtResults.Text = recentRead;
                     }
                 }
             }
-            switch (inGame)
+            else
             {
-                case true:
-                    txtResults.BackColor = Color.Green;
-                    break;
-                case false:
-                    txtResults.BackColor = Color.Red;
-                    break;
-                default:
-                    txtResults.BackColor = Color.Purple;
-                    break;
+                txtResults.BackColor = Color.Red;
+            }
+        }
+
+        private bool inGame()
+        {
+            using (Bitmap bmp = new Bitmap(5, 5))
+            {
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.CopyFromScreen(706,
+                                     938,
+                                     0, 0,
+                                     bmp.Size,
+                                     CopyPixelOperation.SourceCopy);
+
+                    for (int i = 0; i < 2; i++)
+                    {
+                        for (int j = 0; j < 2; j++)
+                        {
+                            Color now_color = bmp.GetPixel(j, i);
+                            if (now_color == green)
+                            {
+                                return true;
+                            }
+                            else
+                            {
+
+                            }
+                        }
+                    }
+                    return false;
+                }
             }
         }
 
@@ -266,7 +263,7 @@ namespace ShootMe
 
             }
         }
-#endregion
+        #endregion
 
         #region Just buttons
         private void cmdShoot_Click(object sender, EventArgs e)
@@ -321,7 +318,7 @@ namespace ShootMe
         {
             gbDebug.Hide();
             this.Width = 165; //165, 110   
-            this.Height = 110;     
+            this.Height = 110;
         }
         #endregion
     }
